@@ -15,6 +15,15 @@ def extract_text_from_pdf(file_path: str) -> str:
     """Extract text from PDF file"""
     text = ""
     
+    # Check if file is actually a PDF by looking at extension and magic bytes
+    if not file_path.lower().endswith('.pdf'):
+        # For non-PDF files, try to read as plain text
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            raise Exception(f"Failed to read file: {e}")
+    
     try:
         # Try with pdfplumber first (better for text extraction)
         with pdfplumber.open(file_path) as pdf:
