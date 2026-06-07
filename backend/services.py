@@ -15,6 +15,15 @@ def extract_text_from_pdf(file_path: str) -> str:
     """Extract text from PDF file"""
     text = ""
     
+    # Check if file is actually a PDF by looking at extension and magic bytes
+    if not file_path.lower().endswith('.pdf'):
+        # For non-PDF files, try to read as plain text
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            raise Exception(f"Failed to read file: {e}")
+    
     try:
         # Try with pdfplumber first (better for text extraction)
         with pdfplumber.open(file_path) as pdf:
@@ -39,50 +48,78 @@ def extract_text_from_pdf(file_path: str) -> str:
     return text
 
 def extract_questions(text: str) -> List[str]:
-    """Extract questions from text"""
+    """Extract questions from text with improved handling of noisy PDF text"""
     questions = []
     
-    # Common question patterns
-    patterns = [
-        r'(?:Q\.|Question\s*\d*[\.:]?\s*)(.+?)(?=(?:Q\.|Question\s*\d*[\.:]?\s*|$))',
-        r'(?:^\d+[\.\)]\s*)(.+?)(?=(?:^\d+[\.\)]\s*|$))',
-        r'(?:[a-zA-Z]\)\s*)(.+?)(?=(?:[a-zA-Z]\)\s*|$))',
-    ]
+    # First, clean up the text - remove excessive noise but preserve question structure
+    # Remove sequences of random special characters that aren't part of questions
+    cleaned = re.sub(r'[^\w\s\.\?\!\,\:\;\(\)\[\]\d]+', ' ', text)
+    # Normalize multiple spaces
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     
-    # Split by common delimiters first
-    delimiters = ['\n\n', '? ', '.\n']
+    # Pattern 1: Q followed by number (Q1., Q2:, Question 1, etc.) - most common for exam papers
+    pattern_q = r'(?:Q\.?\s*\d+[\.:]?\s*|Question\s*\d+[\.:]?\s*)(.+?)(?=(?:Q\.?\s*\d+|Question\s*\d+|$))'
     
-    for delimiter in delimiters:
-        if len(questions) > 0:
-            break
-        parts = text.split(delimiter)
-        for part in parts:
-            part = part.strip()
-            if len(part) > 20 and any(keyword in part.lower() for keyword in ['what', 'how', 'why', 'explain', 'describe', 'calculate']):
-                questions.append(part)
+    # Pattern 2: Number followed by . or ) at start of line or after whitespace
+    pattern_num = r'(?:^|\n)\s*(\d+[\.\)]\s*)(.+?)(?=(?:\n\s*\d+[\.\)]\s*|$))'
     
-    # If no questions found with delimiters, try patterns
-    if len(questions) == 0:
-        for pattern in patterns:
-            matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE | re.MULTILINE)
+    # Pattern 3: Standalone questions with question words
+    pattern_words = r'((?:What|How|Why|When|Where|Who|Explain|Describe|Define|Discuss|Calculate|Show|Prove)[\w\s,]+[\.\\?])'
+    
+    # Try pattern 1 first (most common for exam papers)
+    matches = re.findall(pattern_q, cleaned, re.IGNORECASE | re.DOTALL)
+    if matches:
+        for match in matches:
+            q = match.strip()
+            if len(q) > 10:
+                questions.append(q)
+    
+    # If no matches, try pattern 2
+    if not questions:
+        matches = re.findall(pattern_num, cleaned, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+        if matches:
             for match in matches:
-                if isinstance(match, tuple):
-                    match = match[0]
-                question = match.strip()
-                if len(question) > 10:  # Minimum question length
-                    questions.append(question)
+                q = match[1].strip()
+                if len(q) > 10:
+                    questions.append(q)
     
-    # Clean up questions
-    cleaned_questions = []
+    # If still no matches, try pattern 3
+    if not questions:
+        matches = re.findall(pattern_words, cleaned, re.IGNORECASE)
+        if matches:
+            for match in matches:
+                q = match.strip()
+                if len(q) > 10:
+                    questions.append(q)
+    
+    # If still no questions found, fall back to original heuristic approach
+    if not questions:
+        # Split by common delimiters
+        delimiters = ['\n\n', '? ', '.\n']
+        for delimiter in delimiters:
+            if len(questions) > 0:
+                break
+            parts = text.split(delimiter)
+            for part in parts:
+                part = part.strip()
+                if len(part) > 20 and any(keyword in part.lower() for keyword in ['what', 'how', 'why', 'explain', 'describe', 'calculate']):
+                    questions.append(part)
+    
+    # Clean up extracted questions
+    final_questions = []
     for q in questions:
-        # Remove extra whitespace
+        # Remove leading/trailing noise
+        q = re.sub(r'^[^a-zA-Z\d]+', '', q)
+        q = re.sub(r'[^a-zA-Z\d\?\.\!,\s]+$', '', q)
+        # Normalize spaces
         q = re.sub(r'\s+', ' ', q).strip()
-        # Ensure it ends with proper punctuation
+        # Ensure proper ending
         if not q.endswith(('?', '.', '!')):
             q = q + '?'
-        cleaned_questions.append(q)
+        if len(q) > 15:  # Minimum viable question length
+            final_questions.append(q)
     
-    return cleaned_questions
+    return final_questions
 
 def detect_unit(question_text: str) -> str:
     """Detect unit from question text"""

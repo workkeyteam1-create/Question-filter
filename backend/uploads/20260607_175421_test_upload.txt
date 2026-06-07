@@ -1,0 +1,5 @@
+Q.1 What is artificial intelligence?
+Q.2 Explain machine learning algorithms.
+Q.3 Describe neural networks.
+Q.4 What is deep learning?
+Q.5 Explain supervised and unsupervised learning.
