@@ -1,0 +1,8 @@
+(-_-* ri.,B Gove rrr m en t Coll e ge o f trn gi f tl t u t g ab a d ol Golcrnn" r c" r" rt' .'o.1f M1aSh'a-r-a slttra) (An'+utonomouIhrstitrrte M;;...
+ID: 1)
+
+Q1. What is machine learning? Explain its applications.
+Q2. Describe the perceptron model with diagram.
+Q3. How does backpropagation work?
+Q4. Explain CNN architecture.
+Q5. What is LSTM? Why is it used?
